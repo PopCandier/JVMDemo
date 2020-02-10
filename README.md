@@ -346,5 +346,237 @@ https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html
 
 个人理解的JVM内存模型，由于虚拟机栈和其他区域都是线程私有的，则意味着JVM中如果线程不调用方法，这些结构是不存在的，而**方法区**和**堆**不一样的，他们的生命周期和JVM是相同的，所以当JVM启动的时候，这些区域的内存就已经分配，所以拿这两块来当做JVM的内存模型。MetaSpace和Heap
 
+![1581333894925](./img/1581333894925.png)
 
+* Old区
+
+  * 当一个java对象经过15次(默认)次垃圾回收仍然存活，会被转移到Old区。
+  * 一个对象创建的时候过大（100M），会被直接转移到Old区
+
+* Eden+S0+S1
+
+  * GC最频繁的区域
+  * S0与S1存在的意义在于对象放在Eden区时候，由于垃圾回收导致存储**不连续**，S0和S1轮流整理这些碎片来保证内存连续，空出更多的空间去存放其它区，S0和S1在同一时间必有一个是空的，这是一种牺牲。
+  * 比例上来说，S0**[From]**与S1**[To]**是相同大小，Eden区域分摊剩下的部分，例如Young区是100M，Eden为80M，S0和S1都是10M。Eden:S0:S1=8:1:1
+  * 当S0或S1分配空间不够，会向Old区借用一些空间，成为**担保机制**。
+  * ![1581334917689](./img/1581334917689.png)
+
+  
+
+![1581335759224](./img/1581335759224.png)
+
+* Young GC [包含了Eden，S区]：Minor GC
+* Old GC ：Major GC，MajorGC通常会伴随着MinorGC，差不多类似Full GC
+* Young+Old：Full GC 可能还会伴随着 MetaSpace区域GC
+* 由于Full GC会带来较长的STW，所以要尽量减少Full GC的频率
+
+#### 垃圾回收
+
+* 一个对象什么时候算作垃圾
+
+  * 引用计数，会有循环引用的问题
+
+  * 可达性分析，GC Root，由它出发，某个对象是否可达。
+
+    * GC Root在Java进程需要很长时间存在，生命周期足够长，不然一下就被回收了作为	Root就没意义了。
+
+    * 可作为CGRoot : 类加载器、Thread、虚拟机栈的本地变量表、static成员、常量引用、本地方法 
+
+      栈的变量等。 
+
+垃圾回收中的吞吐量：用户时间/(用户时间+GC时间)
+
+##### 回收算法
+
+当一个对象已经确定是垃圾的时候，采用何种方式进行回收。
+
+![1581338850072](./img/1581338850072.png)
+
+###### 标记清除（Mark-Sweep）
+
+![1581338948907](./img/1581338948907.png)
+
+先标记，后清除。
+
+```
+标记清除之后会产生大量不连续的内存碎片，空间碎片太多可能会导致以后在程 序运行过程中需要分配较大对象时，无法找到足够的连续内存而不得不提前触发另一次垃圾收集动作。 
+(1)标记和清除两个过程都比较耗时，效率不高 
+(2)会产生大量不连续的内存碎片，空间碎片太多可能会导致以后在程序运行过程中需要分配较大对象时，无 法找到足够的连续内存而不得不提前触发另一次垃圾收集动作。
+```
+
+###### 复制 （Copying）
+
+为了解决空间的碎片的问题，我们可以参考young区S0和S1的设计，分成两个区域，浪费一半的区域来获得整理的能力。
+
+![1581339262917](./img/1581339262917.png)
+
+左边有垃圾的时候，将活跃对象复制到另一边，复制到另一边的时候便是连续的，左边就可以大胆的全部清空。就会变成上图的样子，左边干净，右边内存连续。
+
+```
+空间利用率降低。
+```
+
+###### 标记整理（**Mark-Compact**）
+
+标记过程仍然与"标记-清除"算法一样，但是后续步骤不是直接对可回收对象进行清理，而是让所有存活的对象都向一端移动，然后直接清理掉端边界以外的内存。
+
+![1581339866365](./img/1581339866365.png)
+
+让所有存活的对象都向一端移动，清理掉边界意外的内存。
+
+![1581340210811](./img/1581340210811.png)
+
+###### 算法的具体落地->垃圾收集器
+
+https://docs.oracle.com/javase/8/docs/technotes/guides/vm/gctuning/toc.html
+
+不同的垃圾收集器也作用于不同的年龄代。
+
+![1581340441399](./img/1581340441399.png)
+
+撇开垃圾收集器不谈，不同的年龄代适用于什么垃圾回收算法。
+
+* 新生代
+  * 适用于复制算法，由于Eden区域需要将存活的对象复制到S1或者S0，来达到内存整理的目的，那么复制的对象不应该过多，不然损耗的性能会比较大。又由于新生代的对象大多数都是朝生夕死，也就意味着需要复制的对象比较少，所以适用于**复制算法**。
+* 老年代
+  * 老年代不适用于赋值算法，一个是，老年代存在的大小过大的对象，又或者是年龄大于15的对象，所以老年代的对象会存在一种多且大的情况，赋值算法都是比较耗时的，所以适用于**标记整理**或者**标记清除**
+
+垃圾收集器的几个维度
+
+* 单线程/多线程
+* 采用什么算法
+* 作用于什么代
+* 优缺点
+
+例如，Serial垃圾收集器是单线程，采用复制算法，作用于新生代，缺点是单线程可能效率第一点。
+
+垃圾收集器中，需要额外关注的是CMS和G1，其它的区别只是**单线程，多线程，多线程关注吞吐量的**。
+
+###### CMS：Concurrent Mark Sweep 并发垃圾收集器
+
+```java
+The Concurrent Mark Sweep (CMS) collector is designed for applications that prefer shorter garbage collection pauses and that can afford to share processor resources with the garbage collector while the application is running. 
+//更短的暂停时间 https://docs.oracle.com/javase/8/docs/technotes/guides/vm/gctuning/cms.html#concurrent_mark_sweep_cms_collector
+
+```
+
+比较关注**停顿时间**。
+
+采用的是"标记-清除算法",整个过程分为4步
+
+```
+(1)初始标记 CMS initial mark 标记GC Roots能关联到的对象 Stop The World-- ->速度很快 
+(2)并发标记 CMS concurrent mark 进行GC Roots Tracing 
+(3)重新标记 CMS remark 修改并发标记因用户程序变动的内容 Stop The World 
+(4)并发清除 CMS concurrent sweep 优点：并发收集、低停顿 缺点：产生大量空间碎片
+```
+
+![1581342387889](./img/1581342387889.png)
+
+###### G1 
+
+```java
+The Garbage-First (G1) garbage collector is a server-style garbage collector, targeted for multiprocessor machines with large memories. It attempts to meet garbage collection (GC) pause time goals with high probability while achieving high throughput. Whole-heap operations, such as global marking, are performed concurrently with the application threads. This prevents interruptions proportional to heap or live-data size.
+/*
+garbage - first (G1)垃圾收集器是一种服务器风格的垃圾收集器，目标是具有大内存的多处理器机器。它“试图”在实现高吞吐量的同时，以高概率实现垃圾收集(GC)暂停时间目标。整个堆操作(例如全局标记)是与应用程序线程并发执行的。这可以防止与堆或实时数据大小成比例的中断。
+https://docs.oracle.com/javase/8/docs/technotes/guides/vm/gctuning/g1_gc.html#garbage_first_garbage_collection
+*/
+```
+
+> 使用G1收集器时，Java堆的内存布局与就与其他收集器有很大差别，它将整个Java堆划分为多个 大小相等的独立区域（Region），虽然还保留有新生代和老年代的概念，但新生代和老年代不再 是物理隔离的了，它们都是一部分Region（不需要连续）的集合。
+
+```
+初始标记（Initial Marking） 标记一下GC Roots能够关联的对象，并且修改TAMS的值，需要暂 停用户线程 
+并发标记（Concurrent Marking） 从GC Roots进行可达性分析，找出存活的对象，与用户线程并发 
+执行最终标记（Final Marking） 修正在并发标记阶段因为用户程序的并发执行导致变动的数据，需 暂停用户线程 
+筛选回收（Live Data Counting and Evacuation） 对各个Region的回收价值和成本进行排序，根据 用户所期望的GC停顿时间制定回收计划
+```
+
+![1581347531047](./img/1581347531047.png)
+
+G1重新对堆进行了布局，为了适用于G1垃圾收集器，按照`Region`，Young和Old只是逻辑上的连续。
+
+![jsgct_dt_004_grbg_frst_hp](./img/jsgct_dt_004_grbg_frst_hp-1581347972137.png)
+
+H表示大对象，S表示Survivor区的内存，他们虽然逻辑上是连续的，也就是S0或S1区确实是存储了数据，但是在上面真实的内容布局中，其实已经被划分成了一块一块的Region独立区域。为何适合G1垃圾收集器。
+
+同时，Region区域可以监控自己区域的使用情况，使用率，还有内部对象大小，然后G1可以根据这些情况来**决定是否回收**，例如太大了，可能回收起来比较麻烦，就下一次再说。
+
+> JDK 7开始使用，JDK 8非常成熟，JDK 9默认的垃圾收集器，适用于新老生代。
+
+判断是否需要使用G1收集器？
+
+```
+（1）50%以上的堆被存活对象占用 
+（2）对象分配和晋升的速度变化非常大 
+（3）垃圾回收时间比较长
+```
+
+##### JVM 调优 阶段性小结
+
+对于JVM调优有一个是垃圾收集器的选择
+
+而垃圾收集器有两个维度是比较常用的。停顿时间和吞吐量
+
+* **停顿时间**：停顿时间过长会导致用户线程等待过长，在web程序中相当于用户请求的响应时间过程，我们不希望让用户等待时间太久，时间短可以让用户获得更好的体验，用户的交互也越多，那我们可以选择停段时间小的垃圾收集器
+  * CMS、G1[set pause time,not strict 可以设置很短停顿时间，但是不要太严格，不然会频繁触发GC]，他们属于**并发类的收集器**
+* **吞吐量**：运行用户代码时间/（运行用户代码时间+垃圾收集时间），则意味着用户代码执行任务占用CPU的时间较长，由于跑任务，运算这些并不怎么需要创建对象和占有内存资源，更多是占用CPU资源，所以更适用于后台跑批任务的程序。
+  * Paralled Scanvent(作用于新生代，并行，注重吞吐量的垃圾收集器)+Paralled Old(作用于老年代，并行，注重吞吐量的垃圾收集器) 属于**并行类的收集器**。
+* **串行收集**
+  * Serial 和 Serial Old 适用于内存比较小，嵌入式的设备
+
+##### 如何查看你的java进程正在什么垃圾收集器
+
+首先启动一个java进程
+
+```
+jps -l
+```
+
+列出所有的java进程，找到pid
+
+![1581350460275](./img/1581350460275.png)
+
+```
+jinfo -flag UseG1GC 16604
+```
+
+查看是否使用了G1收集器
+
+![1581350564363](./img/1581350564363.png)
+
+减号，代表没有使用，加号代表正在使用，很明显，这个java进程没有使用G1垃圾收集器。如果你不记得了具体参数名字可以输入
+
+```
+jinfo -flags 16604
+```
+
+打印出全部JVM参数。
+
+![1581350734220](./img/1581350734220.png)
+
+```java
+Attaching to process ID 16604, please wait...
+Debugger attached successfully.
+Server compiler detected.
+JVM version is 25.202-b08
+Non-default VM flags: 
+-XX:-BytecodeVerificationLocal 
+-XX:-BytecodeVerificationRemote 
+-XX:CICompilerCount=3 
+-XX:InitialHeapSize=268435456 
+-XX:+ManagementServer 
+-XX:MaxHeapSize=4286578688 
+-XX:MaxNewSize=1428684800 
+-XX:MinHeapDeltaBytes=524288 
+-XX:NewSize=89128960 
+-XX:OldSize=179306496 
+-XX:TieredStopAtLevel=1 
+-XX:+UseCompressedClassPointers 
+-XX:+UseCompressedOops 
+-XX:+UseFastUnorderedTimeStamps 
+-XX:-UseLargePagesIndividualAllocation 
+-XX:+UseParallelGC //使用的ParalledGC
+Command line:  -agentlib:jdwp=transport=dt_socket,address=127.0.0.1:44529,suspend=y,server=n -XX:TieredStopAtLevel=1 -Xverify:none -Dspring.output.ansi.enabled=always -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=44526 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=localhost -Dspring.liveBeansView.mbeanDomain -Dspring.application.admin.enabled=true -javaagent:C:\Users\99405\.IntelliJIdea2018.3\system\captureAgent\debugger-agent.jar -Dfile.encoding=UTF-8
+```
 
