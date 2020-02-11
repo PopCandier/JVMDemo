@@ -580,3 +580,468 @@ Non-default VM flags:
 Command line:  -agentlib:jdwp=transport=dt_socket,address=127.0.0.1:44529,suspend=y,server=n -XX:TieredStopAtLevel=1 -Xverify:none -Dspring.output.ansi.enabled=always -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=44526 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=localhost -Dspring.liveBeansView.mbeanDomain -Dspring.application.admin.enabled=true -javaagent:C:\Users\99405\.IntelliJIdea2018.3\system\captureAgent\debugger-agent.jar -Dfile.encoding=UTF-8
 ```
 
+```
+（1）串行 -XX：+UseSerialGC -XX：+UseSerialOldGC 
+（2）并行(吞吐量优先)： -XX：+UseParallelGC -XX：+UseParallelOldGC 
+（3）并发收集器(响应时间优先) -XX：+UseConcMarkSweepGC -XX：+UseG1G咕
+```
+
+##### JVM参数
+
+* 标准参数：不会随着JDK版本的变化而变化
+  * java -version/-help
+* -X参数
+  * 非标准参数，会随着JDK版本的变化而变化
+  * -Xint
+* -XX参数
+  * Boolean 类型
+    * -XX:[+/-]name 启动或者停止
+  * 非Boolean类型
+    * -XX:name = value
+    * -XX:MaxHeapSize=100M
+* 其它参数[-XX参数]
+  * -Xms100M  等同于 -XX:InitialHeapSize=100M
+  * -Xmx100M  等同于 -XX:MaxHeapSize=100M
+  * -Xss100k  等同于 -XX:ThreadStackSize=100k
+
+例如某个java进程中，想要打印出所有的参数，可以在虚拟机参数中加入
+
+```
+-XX:+PrintFlagsFinal
+```
+
+![1581420870900](./img/1581420870900.png)
+
+系统启动的时候，就会打印出这些参数
+
+![1581420927977](./img/1581420927977.png)
+
+![1581420970612](./img/1581420970612.png)
+
+设置堆最大内存和初始化内存大小为100M
+
+![1581421042082](./img/1581421042082.png)
+
+所以这里显示的是字节(Byte)为单位，前面有个冒号，表示被修改过。
+
+##### 知道参数后如何修改
+
+* idea、eclipse中直接配置，和上面一样
+
+* 在启动jar包的时候，在前面加上参数
+
+  ```
+  java -XX:+UseG1GC xxx.jar
+  ```
+
+* 例如在某个`.sh`里面增加JVM参数，像tomcat的bin文件夹下的catalina.sh中
+
+* 实时修改，jinfo修改，但是要支持适时修改的参数才可以利用jinfo实时修改。尾缀是manageable才支持动态修改
+
+  * jinfo -flag name=value PID
+  * ![1581422486872](./img/1581422486872.png)
+
+| 参数                                                         | 含义                                                         | 说明                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| -XX:CICompilerCount=3                                        | 最大并行编译数                                               | 如果设置大于1，虽然编译速度会提高，但是同样影响系 统稳定性，会增加JVM崩溃的可能 |
+| -XX:InitialHeapSize=100M                                     | 初始化堆大小                                                 | 简写-Xms100M                                                 |
+| -XX:MaxHeapSize=100M                                         | 最大堆大小                                                   | 简写-Xmx100M                                                 |
+| -XX:NewSize=20M                                              | 设置年轻代的大小                                             |                                                              |
+| -XX:MaxNewSize=50M                                           | 年轻代最大大小                                               |                                                              |
+| -XX:OldSize=50M                                              | 设置老年代大小                                               |                                                              |
+| -XX:MetaspaceSize=50M                                        | 设置方法区大小                                               |                                                              |
+| -XX:MaxMetaspaceSize=50M                                     | 方法区最大大小                                               |                                                              |
+| -XX:+UseParallelGC                                           | 使用UseParallelGC                                            | 新生代，吞吐量优先                                           |
+| -XX:+UseParallelOldGC                                        | 使用UseParallelOldGC                                         | 老年代，吞吐量优先                                           |
+| -XX:+UseConcMarkSweepGC                                      | 使用CMS                                                      | 老年代，停顿时间优先                                         |
+| -XX:+UseG1GC                                                 | 使用G1GC                                                     | 新生代，老年代，停顿时间优先                                 |
+| -XX:NewRatio                                                 | 新老生代的比值                                               | 比如-XX:Ratio=4，则表示新生代:老年代=1:4，也就是新 生代占整个堆内存的1/5 |
+| -XX:SurvivorRatio                                            | 两个S区和Eden区的比值                                        | 比如-XX:SurvivorRatio=8，也就是(S0+S1):Eden=2:8， 也就是一个S占整个新生代的1/10 |
+| -XX:+HeapDumpOnOutOfMemoryError                              | 启动堆内存溢出打印                                           | 当JVM堆内存发生溢出时，也就是OOM，自动生成dump 文件          |
+| -XX:HeapDumpPath=heap.hprof                                  | 指定堆内存溢出打印目录                                       | 指定目录生成一个heap.hprof文件                               |
+| XX:+PrintGCDetails - <br />XX:+PrintGCTimeStamps -<br />XX:+PrintGCDateStamps<br />Xloggc:$CATALINA_HOME/logs/gc.log | 打印出GC日志                                                 | 可以使用不同的垃圾收集器，对比查看GC情况                     |
+| Xss128k                                                      | 设置每个线程的堆栈大小                                       | 经验值是3000-5000最佳                                        |
+| -XX:MaxTenuringThreshold=6                                   | 提升年老代的最大临界值                                       | 默认值为 15                                                  |
+| -XX:InitiatingHeapOccupancyPercent                           | 启动并发GC周期时堆内存使用占比                               | G1之类的垃圾收集器用它来触发并发GC周期,基于整个堆 的使用率,而不只是某一代内存的使用比. 值为 0 则表示”一直执行GC循环”. 默认值为 45. |
+| -XX:G1HeapWastePercent                                       | 允许的浪费堆空间的占比                                       | 默认是10%，如果并发标记可回收的空间小于10%,则不 会触发MixedGC。 |
+| -XX:MaxGCPauseMillis=200ms                                   | G1最大停顿时间                                               | 暂停时间不能太小，太小的话就会导致出现G1跟不上垃 圾产生的速度。最终退化成Full GC。所以对这个参数的调优是一个持续的过程，逐步调整到最佳状态。 |
+| -XX:ConcGCThreads=n                                          | 并发垃圾收集器使用的线程数量                                 | 默认值随JVM运行的平台不同而不同                              |
+| -XX:G1MixedGCLiveThresholdPercent=65                         | 混合垃圾回收周期中要包括的旧区域设置 占用率阈值              | 默认占用率为 65%                                             |
+| -XX:G1MixedGCCountTarget=8                                   | 设置标记周期完成后，对存活数据上限为 G1MixedGCLIveThresholdPercent 的旧区域执行混合垃圾回收的目标次数 | 默认8次混合垃圾回收，混合回收的目标是要控制在此目 标次数以内 |
+| \- XX:G1OldCSetRegionThresholdPercent=1                      | 描述Mixed GC时，Old Region被加入到 CSet中                    | 默认情况下，G1只把10%的Old Region加入到CSet中                |
+
+`jstat`：class/gc
+
+```java
+jstat -class [PID] [多少秒输出一次] [输出多少次]
+// class的装载和卸载信息
+```
+
+![1581422786654](./img/1581422786654.png)
+
+```java
+jstat -gc [PID] [多少秒输出一次] [输出多少次]
+// 输出 gc日志
+```
+
+![1581422885413](./img/1581422885413.png)
+
+`jstack`：查看线程堆栈信息
+
+```java
+jstack [PID]
+// 例如可以方便排查死锁之前的问题
+```
+
+![1581422979732](./img/1581422979732.png)
+
+`jmap`：生成堆内存的快照
+
+```
+jmap -heap PID
+```
+
+![1581423504400](./img/1581423504400.png)
+
+导出dump文件：
+
+```java
+jmap -dump:format=b,file=heap.hprof [PID]
+```
+
+![1581423702807](./img/1581423702807.png)
+
+希望发生OOM的自动dump出快照文件。
+
+```java
+-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=heap.hprof
+```
+
+![1581424013295](./img/1581424013295.png)
+
+java中自带的好用的功能
+
+java/bin
+
+* jconsole
+* jvisualvm
+
+分析heap.hprof工具 mat
+
+![1581426530191](./img/1581426530191.png)
+
+查看gc日志
+
+```
+-XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -Xloggc:gc.log
+```
+
+打开gc.log内容
+
+```verilog
+2014-07-18T16:02:17.606+0800（当前时间戳）: 611.633（时间戳）: [GC（表示Young GC） 611.633: [DefNew（单线程Serial年轻代GC）: 843458K（年轻代垃圾回收前的大小）->2K（年轻代回收后的大小）(948864K（年轻代总大小）), 0.0059180 secs（本次回收的时间）] 2186589K（整个堆回收前的大小）->1343132K（整个堆回收后的大小）(3057292K（堆总大小）), 0.0059490 secs（回收时间）] [Times: user=0.00（用户耗时） sys=0.00（系统耗时）, real=0.00 secs（实际耗时）]
+```
+
+```verilog
+Java HotSpot(TM) 64-Bit Server VM (25.202-b08) for windows-amd64 JRE (1.8.0_202-b08), built on Dec 15 2018 19:54:30 by "java_re" with MS VC++ 10.0 (VS2010)
+Memory: 4k page, physical 16740488k(8601488k free), swap 17854600k(5665416k free)
+CommandLine flags: -XX:-BytecodeVerificationLocal -XX:-BytecodeVerificationRemote -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=heap.hprof -XX:InitialHeapSize=104857600 -XX:+ManagementServer -XX:MaxHeapSize=104857600 -XX:-PrintFlagsFinal -XX:+PrintGC -XX:+PrintGCDateStamps -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:TieredStopAtLevel=1 -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:-UseLargePagesIndividualAllocation -XX:+UseParallelGC //使用什么垃圾收集器
+    // 第一次发生gc的原因是因为分配内存失败，对Young区进行垃圾回收 98304k是总堆大小
+2020-02-11T21:14:06.253+0800: 1.403: [GC (Allocation Failure) [PSYoungGen: 25600K->3466K(29696K)] 25600K->3474K(98304K), 0.0055600 secs] [Times: user=0.00 sys=0.00, real=0.01 secs] //从 25600k回收到3466k（总大小29696k）
+2020-02-11T21:14:06.529+0800: 1.678: [GC (Allocation Failure) [PSYoungGen: 29066K->4089K(29696K)] 29074K->5416K(98304K), 0.0071322 secs] [Times: user=0.03 sys=0.02, real=0.01 secs] 
+2020-02-11T21:14:06.683+0800: 1.832: [GC (Allocation Failure) [PSYoungGen: 29689K->4088K(29696K)] 31016K->6921K(98304K), 0.0089296 secs] [Times: user=0.00 sys=0.00, real=0.01 secs] 
+2020-02-11T21:14:06.859+0800: 2.008: [GC (Allocation Failure) [PSYoungGen: 29688K->4088K(29696K)] 32521K->9602K(98304K), 0.0064925 secs] [Times: user=0.06 sys=0.00, real=0.01 secs] 
+    // MetaSpace 的垃圾回收，但是次数比较少
+2020-02-11T21:14:07.190+0800: 2.340: [GC (Metadata GC Threshold) [PSYoungGen: 26551K->4072K(29696K)] 32065K->12164K(98304K), 0.0450055 secs] [Times: user=0.02 sys=0.00, real=0.04 secs] 
+2020-02-11T21:14:07.235+0800: 2.385: [Full GC (Metadata GC Threshold) [PSYoungGen: 4072K->0K(29696K)] [ParOldGen: 8092K->7122K(68608K)] 12164K->7122K(98304K), [Metaspace: 20589K->20587K(1067008K)], 0.0570488 secs] [Times: user=0.03 sys=0.00, real=0.06 secs] 
+//...
+```
+
+**注意** 如果回收的差值中间有出入，说明这部分空间是Old区释放出来的
+
+使用工具查看gc日志，`gcviewer`
+
+```
+java -jar gcviewer-1.36-SNAPSHOT.jar
+```
+
+![1581427526145](./img/1581427526145.png)
+
+关注吞吐量和停顿时间。
+
+![1581427637175](./img/1581427637175.png)
+
+![1581427726514](./img/1581427726514.png)
+
+在线工具，http://gceasy.io
+
+##### JVM调优实战
+
+比较不同的垃圾收集器的效率。
+
+评价一个垃圾收集器的好坏，**停顿时间、吞吐量、GC次数**
+
+使用CMS垃圾收集器，由于CMS是老年代的收集器，所以Old的垃圾收集器被他取代
+
+```
+-XX:+UseConcMarkSweepGC
+```
+
+使用cms后的垃圾收集器的日志
+
+```verilog
+Java HotSpot(TM) 64-Bit Server VM (25.202-b08) for windows-amd64 JRE (1.8.0_202-b08), built on Dec 15 2018 19:54:30 by "java_re" with MS VC++ 10.0 (VS2010)
+Memory: 4k page, physical 16740488k(7799660k free), swap 17854600k(3917260k free)
+CommandLine flags: -XX:-BytecodeVerificationLocal -XX:-BytecodeVerificationRemote -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=heap.hprof -XX:InitialHeapSize=104857600 -XX:+ManagementServer -XX:MaxHeapSize=104857600 -XX:MaxNewSize=34955264 -XX:MaxTenuringThreshold=6 -XX:NewSize=34955264 -XX:OldPLABSize=16 -XX:OldSize=69902336 -XX:-PrintFlagsFinal -XX:+PrintGC -XX:+PrintGCDateStamps -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:TieredStopAtLevel=1 -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseConcMarkSweepGC //老年代
+    -XX:-UseLargePagesIndividualAllocation -XX:+UseParNewGC //新生代
+2020-02-11T21:52:09.334+0800: 1.202: [GC (Allocation Failure) 2020-02-11T21:52:09.335+0800: 1.202: [ParNew: 27328K->3392K(30720K), 0.0041916 secs] 27328K->3567K(99008K), 0.0044090 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+2020-02-11T21:52:09.604+0800: 1.471: [GC (Allocation Failure) 2020-02-11T21:52:09.604+0800: 1.471: [ParNew: 30720K->3391K(30720K), 0.0102653 secs] 30895K->6980K(99008K), 0.0103417 secs] [Times: user=0.05 sys=0.00, real=0.01 secs] 
+2020-02-11T21:52:09.814+0800: 1.681: [GC (Allocation Failure) 2020-02-11T21:52:09.814+0800: 1.681: [ParNew: 30719K->2876K(30720K), 0.0052050 secs] 34308K->7418K(99008K), 0.0052736 secs] [Times: user=0.00 sys=0.00, real=0.01 secs] 
+2020-02-11T21:52:10.003+0800: 1.870: [GC (Allocation Failure) 2020-02-11T21:52:10.003+0800: 1.870: [ParNew: 30204K->3391K(30720K), 0.0029662 secs] 34746K->8694K(99008K), 0.0030379 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+2020-02-11T21:52:10.440+0800: 2.308: [GC (Allocation Failure) 2020-02-11T21:52:10.440+0800: 2.308: [ParNew: 30719K->3391K(30720K), 0.0028880 secs] 36022K->9410K(99008K), 0.0029563 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+2020-02-11T21:52:10.454+0800: 2.322: [GC (CMS Initial Mark) [1 CMS-initial-mark: 6018K(68288K)] 10921K(99008K), 0.0005622 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+2020-02-11T21:52:10.455+0800: 2.323: [CMS-concurrent-mark-start]
+2020-02-11T21:52:10.461+0800: 2.329: [CMS-concurrent-mark: 0.006/0.006 secs] [Times: user=0.00 sys=0.00, real=0.01 secs] 
+2020-02-11T21:52:10.461+0800: 2.329: [CMS-concurrent-preclean-start]
+2020-02-11T21:52:10.462+0800: 2.329: [CMS-concurrent-preclean: 0.000/0.000 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+2020-02-11T21:52:10.462+0800: 2.329: [CMS-concurrent-abortable-preclean-start]
+2020-02-11T21:52:10.617+0800: 2.484: [CMS-concurrent-abortable-preclean: 0.026/0.155 secs] [Times: user=0.31 sys=0.05, real=0.16 secs] 
+2020-02-11T21:52:10.617+0800: 2.485: [GC (CMS Final Remark) [YG occupancy: 23670 K (30720 K)]2020-02-11T21:52:10.617+0800: 2.485: [Rescan (parallel) , 0.0025262 secs]2020-02-11T21:52:10.620+0800: 2.487: [weak refs processing, 0.0002359 secs]2020-02-11T21:52:10.620+0800: 2.487: [class unloading, 0.0023750 secs]2020-02-11T21:52:10.622+0800: 2.490: [scrub symbol table, 0.0037827 secs]2020-02-11T21:52:10.626+0800: 2.494: [scrub string table, 0.0003802 secs][1 CMS-remark: 6018K(68288K)] 29688K(99008K), 0.0096806 secs] [Times: user=0.01 sys=0.00, real=0.01 secs] 
+    //....
+```
+
+这段日志
+
+```verilog
+2020-02-11T21:52:10.454+0800: 2.322: [GC (CMS Initial Mark) [1 CMS-initial-mark: 6018K(68288K)] 10921K(99008K), 0.0005622 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+2020-02-11T21:52:10.455+0800: 2.323: [CMS-concurrent-mark-start]
+2020-02-11T21:52:10.461+0800: 2.329: [CMS-concurrent-mark: 0.006/0.006 secs] [Times: user=0.00 sys=0.00, real=0.01 secs] 
+2020-02-11T21:52:10.461+0800: 2.329: [CMS-concurrent-preclean-start]
+2020-02-11T21:52:10.462+0800: 2.329: [CMS-concurrent-preclean: 0.000/0.000 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+2020-02-11T21:52:10.462+0800: 2.329: [CMS-concurrent-abortable-preclean-start]
+2020-02-11T21:52:10.617+0800: 2.484: [CMS-concurrent-abortable-preclean: 0.026/0.155 secs] [Times: user=0.31 sys=0.05, real=0.16 secs] 
+2020-02-11T21:52:10.617+0800: 2.485: [GC (CMS Final Remark) [YG occupancy: 23670 K (30720 K)]2020-02-11T21:52:10.617+0800: 2.485: [Rescan (parallel) , 0.0025262 secs]2020-02-11T21:52:10.620+0800: 2.487: [weak refs processing, 0.0002359 secs]2020-02-11T21:52:10.620+0800: 2.487: [class unloading, 0.0023750 secs]2020-02-11T21:52:10.622+0800: 2.490: [scrub symbol table, 0.0037827 secs]2020-02-11T21:52:10.626+0800: 2.494: [scrub string table, 0.0003802 secs][1 CMS-remark: 6018K(68288K)] 29688K(99008K), 0.0096806 secs] [Times: user=0.01 sys=0.00, real=0.01 secs] 
+2020-02-11T21:52:10.628+0800: 2.495: [CMS-concurrent-sweep-start]
+2020-02-11T21:52:10.629+0800: 2.497: [CMS-concurrent-sweep: 0.002/0.002 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+2020-02-11T21:52:10.629+0800: 2.497: [CMS-concurrent-reset-start]
+2020-02-11T21:52:10.629+0800: 2.497: [CMS-concurrent-reset: 0.000/0.000 secs] [Times: user=0.00 sys=0.00, real=0.00 secs]
+```
+
+![1581342387889](./img/1581342387889.png)
+
+对应这些动作
+
+换成**G1GC**
+
+```
+-XX:+UseG1GC
+```
+
+打开日志文件
+
+```verilog
+Java HotSpot(TM) 64-Bit Server VM (25.202-b08) for windows-amd64 JRE (1.8.0_202-b08), built on Dec 15 2018 19:54:30 by "java_re" with MS VC++ 10.0 (VS2010)
+Memory: 4k page, physical 16740488k(7632492k free), swap 17854600k(3744104k free)
+CommandLine flags: -XX:-BytecodeVerificationLocal -XX:-BytecodeVerificationRemote -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=heap.hprof -XX:InitialHeapSize=104857600 -XX:+ManagementServer -XX:MaxHeapSize=104857600 -XX:-PrintFlagsFinal -XX:+PrintGC -XX:+PrintGCDateStamps -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:TieredStopAtLevel=1 -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:-UseConcMarkSweepGC -XX:+UseG1GC -XX:-UseLargePagesIndividualAllocation 
+2020-02-11T22:09:57.974+0800: 0.982: [GC pause (G1 Evacuation Pause) (young), 0.0027948 secs]
+   [Parallel Time: 2.2 ms, GC Workers: 4]
+      [GC Worker Start (ms): Min: 981.8, Avg: 981.8, Max: 981.8, Diff: 0.0]
+      [Ext Root Scanning (ms): Min: 0.3, Avg: 0.6, Max: 1.2, Diff: 0.9, Sum: 2.3]
+      [Update RS (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0]
+         [Processed Buffers: Min: 0, Avg: 0.0, Max: 0, Diff: 0, Sum: 0]
+      [Scan RS (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0]
+      [Code Root Scanning (ms): Min: 0.0, Avg: 0.1, Max: 0.1, Diff: 0.1, Sum: 0.2]
+      [Object Copy (ms): Min: 1.0, Avg: 1.5, Max: 1.8, Diff: 0.8, Sum: 6.1]
+      [Termination (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0]
+         [Termination Attempts: Min: 1, Avg: 5.0, Max: 8, Diff: 7, Sum: 20]
+      [GC Worker Other (ms): Min: 0.0, Avg: 0.0, Max: 0.1, Diff: 0.0, Sum: 0.2]
+      [GC Worker Total (ms): Min: 2.2, Avg: 2.2, Max: 2.2, Diff: 0.0, Sum: 8.8]
+      [GC Worker End (ms): Min: 984.0, Avg: 984.0, Max: 984.0, Diff: 0.0]
+   [Code Root Fixup: 0.0 ms]
+   [Code Root Purge: 0.0 ms]
+   [Clear CT: 0.0 ms]
+   [Other: 0.5 ms]
+      [Choose CSet: 0.0 ms]
+      [Ref Proc: 0.4 ms]
+      [Ref Enq: 0.0 ms]
+      [Redirty Cards: 0.0 ms]
+      [Humongous Register: 0.0 ms]
+      [Humongous Reclaim: 0.0 ms]
+      [Free CSet: 0.0 ms]
+   [Eden: 14.0M(14.0M)->0.0B(18.0M) Survivors: 0.0B->2048.0K Heap: 14.0M(100.0M)->2194.5K(100.0M)]
+ [Times: user=0.00 sys=0.00, real=0.00 secs] 
+    
+    // 初始标记，初始标记产生的时候，是当堆内存的使用率到达一点数额的时候，就会初始标记，我们可以调整这个值来尽量减少GC次数
+2020-02-11T22:09:59.006+0800: 2.014: [GC pause (Metadata GC Threshold) (young) (initial-mark), 0.0052767 secs]
+   [Parallel Time: 4.0 ms, GC Workers: 4]
+      [GC Worker Start (ms): Min: 2013.8, Avg: 2014.0, Max: 2014.5, Diff: 0.8]
+      [Ext Root Scanning (ms): Min: 0.1, Avg: 0.6, Max: 0.8, Diff: 0.8, Sum: 2.5]
+      [Update RS (ms): Min: 0.0, Avg: 0.1, Max: 0.2, Diff: 0.2, Sum: 0.4]
+         [Processed Buffers: Min: 0, Avg: 2.5, Max: 5, Diff: 5, Sum: 10]
+      [Scan RS (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0]
+      [Code Root Scanning (ms): Min: 0.0, Avg: 0.8, Max: 2.9, Diff: 2.9, Sum: 3.1]
+      [Object Copy (ms): Min: 0.1, Avg: 2.2, Max: 3.0, Diff: 3.0, Sum: 8.7]
+      [Termination (ms): Min: 0.0, Avg: 0.1, Max: 0.1, Diff: 0.1, Sum: 0.2]
+         [Termination Attempts: Min: 1, Avg: 4.0, Max: 5, Diff: 4, Sum: 16]
+      [GC Worker Other (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0]
+      [GC Worker Total (ms): Min: 3.2, Avg: 3.7, Max: 3.9, Diff: 0.8, Sum: 14.9]
+      [GC Worker End (ms): Min: 2017.7, Avg: 2017.7, Max: 2017.7, Diff: 0.0]
+   [Code Root Fixup: 0.0 ms]
+   [Code Root Purge: 0.0 ms]
+   [Clear CT: 0.0 ms]
+   [Other: 1.2 ms]
+      [Choose CSet: 0.0 ms]
+      [Ref Proc: 1.1 ms]
+      [Ref Enq: 0.0 ms]
+      [Redirty Cards: 0.0 ms]
+      [Humongous Register: 0.0 ms]
+      [Humongous Reclaim: 0.0 ms]
+      [Free CSet: 0.0 ms]
+   [Eden: 32.0M(52.0M)->0.0B(52.0M) Survivors: 8192.0K->8192.0K Heap: 42.8M(100.0M)->10.3M(100.0M)]
+ [Times: user=0.00 sys=0.00, real=0.00 secs] 
+2020-02-11T22:09:59.011+0800: 2.019: [GC concurrent-root-region-scan-start]
+2020-02-11T22:09:59.015+0800: 2.023: [GC concurrent-root-region-scan-end, 0.0036850 secs]
+2020-02-11T22:09:59.015+0800: 2.023: [GC concurrent-mark-start]
+2020-02-11T22:09:59.018+0800: 2.026: [GC concurrent-mark-end, 0.0033481 secs]
+2020-02-11T22:09:59.022+0800: 2.030: [GC remark 2020-02-11T22:09:59.022+0800: 2.030: [Finalize Marking, 0.0000481 secs] 2020-02-11T22:09:59.022+0800: 2.030: [GC ref-proc, 0.0020152 secs] 2020-02-11T22:09:59.024+0800: 2.032: [Unloading, 0.0017469 secs], 0.0039557 secs]
+ [Times: user=0.00 sys=0.00, real=0.00 secs] 
+2020-02-11T22:09:59.032+0800: 2.040: [GC cleanup 11M->10M(100M), 0.0001700 secs]
+ [Times: user=0.00 sys=0.00, real=0.00 secs] 
+2020-02-11T22:09:59.032+0800: 2.040: [GC concurrent-cleanup-start]
+2020-02-11T22:09:59.032+0800: 2.040: [GC concurrent-cleanup-end, 0.0000079 secs]
+2020-02-11T22:09:59.715+0800: 2.723: [GC pause (G1 Evacuation Pause) (young), 0.0063280 secs]
+//....
+```
+
+格式解读：https://blogs.oracle.com/poonam/understanding-g1-gc-logs
+
+![1581347531047](./img/1581347531047.png)
+
+使用工具分析日志文件尝试调优，当使用G1GC的时候。
+
+![1581431122526](./img/1581431122526.png)
+
+吞吐量为**98.51%**。
+
+![1581431192762](./img/1581431192762.png)
+
+最小停顿时间，**0.272s**，最大停顿时间，**0.795s**，平均停顿时间，**0.51033s**
+
+![1581431913421](./img/1581431913421.png)
+gc的次数，**9次**
+
+```
+Throughput	min	pause	max pause	avg pause	gc time
+98.51%		0.00017s	0.00865s	0.00507s	9	// 未优化
+```
+
+第一步，我们可以尝试调大堆的内存，因为可分配的空间大了，gc的次数也会减少。
+
+```java
+-Xms200M -Xmx200M  // 原 -Xms100M -Xmx100M
+```
+
+![1581432358330](./img/1581432358330.png)
+
+![1581432376184](./img/1581432376184.png)
+
+```java
+Throughput	min	pause	max pause	avg pause	gc time
+98.51%		0.00017s	0.00865s	0.00507s	9	// 未优化
+98.53%		0.00018s	0.01281s	0.00564s	6	// 调整堆大小 100M->200M
+```
+
+虽然吞吐量和gc次数上升了，但是停顿时间上升的，很简单，因为空间大了，需要扫描的空间就多了，这些时间就会给gc停顿时间累加。
+
+选用G1的一个很重要的目的，是G1是可以调整垃圾收集的停顿时间。
+
+```java
+-XX:MaxGCPauseMillis=250 // 设置gc的停顿段时间为250ms，也就是0.025s
+```
+
+![1581433042119](./img/1581433042119.png)
+
+![1581433068433](./img/1581433068433.png)
+
+```java
+Throughput	min	pause	max pause	avg pause	gc time
+98.51%		0.00017s	0.00865s	0.00507s	9	// 未优化
+98.53%		0.00018s	0.01281s	0.00564s	6	// 调整堆大小 100M->200M
+98.57%		0.00015s	0.01260s	0.00574s	6	// 调整gc停顿时间 250ms	
+```
+
+第二次优化，吞吐量稍微上升，gc次数不变，虽然最小的停顿时间在250ms附近，最大停顿时间下降，平均停顿时间上升了。由于停段时间短了，所以导致一次gc能够回收的垃圾无法回收，G1的标记没有标记完，回收没有回收完，就下次一定。
+
+尝试调整为400ms
+
+```
+-XX:MaxGCPauseMillis=400
+```
+
+![1581433341042](./img/1581433341042.png)
+
+![1581433368173](./img/1581433368173.png)
+
+```java
+Throughput	min	pause	max pause	avg pause	gc time
+98.51%		0.00017s	0.00865s	0.00507s	9	// 未优化
+98.53%		0.00018s	0.01281s	0.00564s	6	// 调整堆大小 100M->200M
+98.57%		0.00015s	0.01260s	0.00574s	6	// 调整gc停顿时间 250ms	
+98.17%		0.00018s	0.01397s	0.00610s	6	// 调整gc停顿时间 250ms->400ms
+```
+
+在G1垃圾收集器中，触发初始标记这个动作是当堆中已经使用的空间占总空间多少时间，就会触发，所以我们还可以调整这个值。
+
+```
+jinfo -flag InitiatingHeapOccupancyPercent  14792
+```
+
+![1581434570346](./img/1581434570346.png)
+
+这个值默认是超过`45%`的时候，会出发G1的初始标记，我们可以尝试调大这个值。我们尝试把他改成`60%`
+
+```java
+-XX:InitiatingHeapOccupancyPercent=60
+```
+
+![1581434795256](./img/1581434795256.png)
+
+![1581434835111](./img/1581434835111.png)
+
+```java
+Throughput	min	pause	max pause	avg pause	gc time
+98.51%		0.00017s	0.00865s	0.00507s	9	// 未优化
+98.53%		0.00018s	0.01281s	0.00564s	6	// 调整堆大小 100M->200M
+98.57%		0.00015s	0.01260s	0.00574s	6	// 调整gc停顿时间 250ms	
+98.17%		0.00018s	0.01397s	0.00610s	6	// 调整gc停顿时间 250ms->400ms
+98.25%		0.00020s	0.01348s	0.00620s	6	// 调成超过60%开始初始标记
+```
+
+类似这样找到最合适的配置。所以我们觉得先将堆大小调整为200M，停顿时间调整为250ms比较合适。
+
+G1的官网调优指南 https://docs.oracle.com/javase/8/docs/technotes/guides/vm/gctuning/g1_gc_tuning.html#recommendations 
+
+* 如果你使用G1垃圾收集器，请不要调整`-XX:NewRatio`，因为G1为了配置你设置的最短停顿时间会动态调整young区大小。
+
+JVM调优：
+
+* cpu飙升
+* 内存空间不够
+* gc次数太多导致用户代码执行会受影响，cpu的负担过高
+
+
+
+##### G1与CMS区别
+
+* 算法
+  * G1使用标记-整理算法（减少空间碎片，会优先收集垃圾较多的区域），CMS使用标记清除
+  * CMS在老年代 使用CardTable记录引用了谁，来减少全盘扫描所带来的性能消耗。
+  * G1使用Remembered Set 简称RSet，记录了谁引用了我，和CMS是反过来的，也是避免全盘扫描。
+* 作用区域
+  * G1作用了新生代和老年代，CMS作用于老年代
+* 内存分布
+  * G1不再使用堆连续的内存区域作为依据，他将堆内存切割为多个单独的region，来方便垃圾整理，老年代新生代和metaspace逻辑上连续，物理上不连续。
+* 名称不一样
+* G1要用在大内存多核心上，官网上建议内存在6G以上。
+* G1可以设置gc停顿时间。
+* G1中的CSet用于存储一组被回收的分区的集合，存活的对象会被移动到另外的分区，CSet用于管理这些，CSet的大小一般小于1%
