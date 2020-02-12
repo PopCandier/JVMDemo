@@ -724,7 +724,34 @@ java中自带的好用的功能
 java/bin
 
 * jconsole
+
 * jvisualvm
+
+  * 连接远端
+
+    * (1)在visualvm中选中“远程”，右击“添加” 
+
+      (2)主机名上写服务器的ip地址，比如31.100.39.63，然后点击“确定” 
+
+      (3)右击该主机“31.100.39.63”，添加“JMX”[也就是通过JMX技术具体监控远端服务器哪个Java进程] 
+
+      (4)要想让服务器上的tomcat被连接，需要改一下 bin/catalina.sh 这个文件 
+
+    * ```sh
+      JAVA_OPTS="$JAVA_OPTS -Dcom.sun.management.jmxremote - Djava.rmi.server.hostname=31.100.39.63 -Dcom.sun.management.jmxremote.port=8998 -Dcom.sun.management.jmxremote.ssl=false - Dcom.sun.management.jmxremote.authenticate=true - Dcom.sun.management.jmxremote.access.file=../conf/jmxremote.access - Dcom.sun.management.jmxremote.password.file=../conf/jmxremote.password"
+      # 密码和访问文件可以另外创建
+      # jmxremote.access
+      # guest readonly 配置用户名和访问权限
+      # manager readwrite
+      
+      # jmxremote.password
+      # guest guest 配置用户名和密码
+      # manager manager
+      
+      #chmod 600 *jmxremot* 授予权限
+      ```
+
+    * 应对阿里云策略的修改（略）
 
 分析heap.hprof工具 mat
 
